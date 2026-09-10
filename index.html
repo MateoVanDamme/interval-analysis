@@ -179,19 +179,33 @@ function buildTrack() {
   trackGroup.add(shadow);
 
   // Tube, colored by pace
+  // TubeGeometry samples the curve evenly by arc length, not by point index, and the
+  // GPS points are denser when running slowly. Map each tube segment back to the track
+  // point through cumulative path length so color and height agree at every location.
+  const cum = new Float64Array(N);
+  for (let i = 1; i < N; i++) cum[i] = cum[i - 1] + pts[i].distanceTo(pts[i - 1]);
+  const total = cum[N - 1];
+  const idxAtLength = d => {           // largest i with cum[i] <= d
+    let lo = 0, hi = N - 1;
+    while (lo < hi) { const m = (lo + hi + 1) >> 1; if (cum[m] <= d) lo = m; else hi = m - 1; }
+    return lo;
+  };
   const curve = new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.1);
+  curve.arcLengthDivisions = N * 2;  // accurate arc-length parameterization (default is 200)
   const radial = 6, segs = N - 1;
   const tube = new THREE.TubeGeometry(curve, segs, extent * 0.0016, radial, false);
   const colors = new Float32Array(tube.attributes.position.count * 3);
   for (let v = 0; v < tube.attributes.position.count; v++) {
     const seg = Math.floor(v / (radial + 1));
-    const i = Math.min(N - 1, Math.round(seg / segs * (N - 1)));
+    const i = idxAtLength(seg / segs * total);
     const col = paceColor(P[i][5]);
     colors.set([col.r, col.g, col.b], v * 3);
   }
   tube.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  const tubeMesh = new THREE.Mesh(tube, new THREE.MeshLambertMaterial({ vertexColors: true, emissive: "#000000" }));
-  tubeMesh.name = "tube"; tubeMesh.userData.segs = segs; trackGroup.add(tubeMesh);
+  // Unlit material: the vertex color is the data, so no shading may alter it.
+  const tubeMesh = new THREE.Mesh(tube, new THREE.MeshBasicMaterial({ vertexColors: true }));
+  tubeMesh.name = "tube"; tubeMesh.userData.segs = segs; tubeMesh.userData.idxAtLength = idxAtLength; tubeMesh.userData.total = total;
+  trackGroup.add(tubeMesh);
 
   // Rep labels above the midpoint of each rep
   DATA.reps.forEach((r, k) => {
@@ -291,7 +305,7 @@ function doHover(e) {
   const hit = ray.intersectObject(tube, false)[0];
   if (!hit) { tip.style.display = "none"; return; }
   const seg = Math.floor(hit.faceIndex / (2 * 6));
-  const i = Math.min(N - 1, Math.round(seg / tube.userData.segs * (N - 1)));
+  const i = tube.userData.idxAtLength(seg / tube.userData.segs * tube.userData.total);
   const p = P[i];
   tip.innerHTML = `<b>${fmtPace(p[5])}</b> /km<br>${fmtClock(p[3])} · ${(p[4] / 1000).toFixed(2)} km · ${p[6] || "-"} spm<br>${p[2].toFixed(1)} m elevation · ${p[7] > 0 ? DATA.phases[p[7]] : "easy"}`;
   tip.style.left = e.clientX + "px"; tip.style.top = e.clientY + "px"; tip.style.display = "block";
