@@ -1,5 +1,8 @@
 :root {
-  --ground: #0e0e0e;
+  --ground: #000000;       /* page and 3D scene background, also the fog color */
+  --plane: #0a0a0a;        /* 3D ground plane */
+  --grid-major: #222;      /* 500 m grid lines */
+  --grid-minor: #161616;   /* 100 m grid lines */
   --panel: rgba(20, 20, 20, 0.92);
   --panel-edge: #333;
   --text: #ddd;

@@ -55,7 +55,10 @@ HEAD_LINKS = """<title>3 x 5min in 3D</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap">"""
 
 CSS = """:root {
-  --ground: #0e0e0e;
+  --ground: #000000;       /* page and 3D scene background, also the fog color */
+  --plane: #0a0a0a;        /* 3D ground plane */
+  --grid-major: #222;      /* 500 m grid lines */
+  --grid-minor: #161616;   /* 100 m grid lines */
   --panel: rgba(20, 20, 20, 0.92);
   --panel-edge: #333;
   --text: #ddd;
@@ -261,19 +264,20 @@ const wrap = document.getElementById("scene");
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
-renderer.outputEncoding = THREE.sRGBEncoding;
 wrap.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#0e0e0e");
-scene.fog = new THREE.Fog("#0e0e0e", 3500, 9000);
+// Scene colors are read from style.css so the tokens there drive the 3D view too.
+const cssTok = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+scene.background = new THREE.Color(cssTok("--ground"));
+scene.fog = new THREE.Fog(cssTok("--ground"), 3500, 9000);
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 30000);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI / 2 - 0.02;
 
-scene.add(new THREE.HemisphereLight("#e6e6e6", "#0e0e0e", 0.9));
+scene.add(new THREE.HemisphereLight("#e6e6e6", cssTok("--ground"), 0.9));
 const sun = new THREE.DirectionalLight("#ffffff", 0.7); sun.position.set(-1500, 2200, 1200); scene.add(sun);
 
 // Bounds and ground
@@ -282,10 +286,10 @@ const bb = { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: 
 const cx = (bb.x0 + bb.x1) / 2, cz = (bb.z0 + bb.z1) / 2;
 const extent = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0);
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(extent * 6, extent * 6), new THREE.MeshBasicMaterial({ color: "#121212" }));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(extent * 6, extent * 6), new THREE.MeshBasicMaterial({ color: cssTok("--plane") }));
 ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.5, cz); scene.add(ground);
 const gridSize = Math.ceil(extent * 2.6 / 500) * 500;
-const grid = new THREE.GridHelper(gridSize, gridSize / 100, "#2a2a2a", "#1c1c1c");
+const grid = new THREE.GridHelper(gridSize, gridSize / 100, cssTok("--grid-major"), cssTok("--grid-minor"));
 grid.material.transparent = true; grid.material.opacity = 0.6; grid.position.set(cx, 0, cz); scene.add(grid);
 
 // Scale bar: 500 m on the ground, south-west corner
