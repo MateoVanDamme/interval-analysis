@@ -1,3 +1,5 @@
+/* interval-analysis viewer. The :root tokens also drive the three.js scene
+   (background, fog, ground plane, grid), read at startup by app.js. */
 :root {
   --ground: #000000;       /* page and 3D scene background, also the fog color */
   --plane: #0a0a0a;        /* 3D ground plane */
@@ -79,7 +81,7 @@ body {
 
 #bar {
   left: 16px; right: 16px; bottom: 16px; padding: 10px 14px;
-  display: grid; grid-template-columns: auto auto 1fr auto auto auto; gap: 14px; align-items: center;
+  display: grid; grid-template-columns: auto auto 1fr auto auto auto auto; gap: 14px; align-items: center;
 }
 button, select {
   font: inherit; font-weight: 600; color: var(--text); background: #222; border: 1px solid var(--panel-edge);
@@ -107,6 +109,9 @@ label.ctl output { color: var(--text); font-variant-numeric: tabular-nums; min-w
 }
 #tip b { font-family: var(--display); font-size: 14px; font-weight: 700; }
 #hint { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); color: var(--faint); font-size: 11px; pointer-events: none; }
+#attrib { position: fixed; right: 18px; bottom: 74px; color: var(--faint); font-size: 10px; }
+#attrib a { color: var(--muted); text-decoration: none; }
+#attrib a:hover { color: var(--text); }
 
 @media (max-width: 860px) {
   #legend, #reps { display: none; }

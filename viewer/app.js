@@ -1,225 +1,7 @@
-"""Build a self-contained 3D viewer (three.js) for the interval session.
-
-Reads the CSVs written by interval_analysis.ipynb and writes index.html and style.css
-with the track data embedded. The vertical axis is running speed (faster is
-higher), not elevation: the route is flat and pace is what the session is about.
-The data is embedded, so the page works from a plain file:// open
-(only the three.js scripts and fonts are loaded from a CDN).
-
-Usage:  python build_gpx_3d.py [--fragment]
-  --fragment [path]  also write a single-file variant (CSS inlined, no <html>/<head>/<body>
-                     wrapper) for hosts that supply their own document skeleton.
-"""
-import json
-import sys
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-
-HERE = Path(__file__).parent
-POINTS = pd.read_csv(HERE / "data" / "3_x_5min_processed.csv")
-INTERVALS = pd.read_csv(HERE / "data" / "3_x_5min_intervals.csv", index_col=0)
-GPX_NAME = "3 x 5min"
-
-# --- project to local meters (east = x, north = y) ---------------------------
-lat0 = POINTS.lat.mean()
-east = (POINTS.lon - POINTS.lon.iloc[0]).values * 111_320 * np.cos(np.radians(lat0))
-north = (POINTS.lat - POINTS.lat.iloc[0]).values * 110_540
-phase_names = ["easy"] + list(INTERVALS.index)
-phase_idx = POINTS.phase.map({p: i for i, p in enumerate(phase_names)}).fillna(0).astype(int)
-
-pace = POINTS.pace_min_km.replace([np.inf, -np.inf], np.nan).fillna(20).clip(upper=20)
-
-data = {
-    "name": GPX_NAME,
-    "start": str(POINTS.time.iloc[0]),
-    "phases": phase_names,
-    "reps": [
-        {"name": n, "start": float(r.start_s), "end": float(r.end_s), "startIdx": int(r.start_idx),
-         "endIdx": int(r.end_idx), "dist": float(r.distance_m), "pace": float(r.avg_pace_min_km),
-         "cad": float(r.avg_cadence_spm)}
-        for n, r in INTERVALS.iterrows()
-    ],
-    # columns: east, north, ele, t, dist, pace, cadence, phase
-    "pts": [
-        [round(float(e), 1), round(float(n), 1), round(float(z), 1), float(t), round(float(d), 1),
-         round(float(p), 2), int(c), int(ph)]
-        for e, n, z, t, d, p, c, ph in zip(east, north, POINTS.ele, POINTS.t, POINTS.dist_m, pace,
-                                            POINTS.cadence_spm.fillna(0), phase_idx)
-    ],
-}
-
-HEAD_LINKS = """<title>3 x 5min in 3D</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap">"""
-
-CSS = """:root {
-  --ground: #000000;       /* page and 3D scene background, also the fog color */
-  --plane: #0a0a0a;        /* 3D ground plane */
-  --grid-major: #222;      /* 500 m grid lines */
-  --grid-minor: #161616;   /* 100 m grid lines */
-  --panel: rgba(20, 20, 20, 0.92);
-  --panel-edge: #333;
-  --text: #ddd;
-  --muted: #888;
-  --faint: #555;
-  --work: #dc143c;
-  --easy: #444;
-  --pace-slow: #551100;
-  --pace-mid: #cc3300;
-  --pace-fast: #ffee55;
-  --focus: #dc143c;
-  --display: "Space Mono", Consolas, "Courier New", monospace;
-  --ui: "Space Mono", Consolas, "Courier New", monospace;
-}
-html, body { margin: 0; height: 100%; }
-body {
-  background: var(--ground); color: var(--text); font-family: var(--ui); font-size: 12px;
-  overflow: hidden; -webkit-font-smoothing: antialiased;
-}
-#scene { position: fixed; inset: 0; display: block; }
-#scene canvas { display: block; }
-.panel {
-  position: fixed; background: var(--panel); border: 1px solid var(--panel-edge);
-  border-radius: 6px; backdrop-filter: blur(6px); pointer-events: auto;
-}
-#session { top: 16px; left: 16px; padding: 14px 18px 12px; min-width: 250px; }
-#session h1 {
-  margin: 0; font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1.1;
-  letter-spacing: -0.01em; text-wrap: balance;
-}
-#session .sub { margin: 6px 0 14px; color: var(--muted); font-size: 11px; }
-.stats { display: grid; grid-template-columns: repeat(3, auto); gap: 10px 22px; }
-.stat .k { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; }
-.stat .v {
-  font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.05;
-  font-variant-numeric: tabular-nums; margin-top: 2px;
-}
-.stat .v small { font-size: 11px; color: var(--muted); font-family: var(--ui); margin-left: 3px; font-weight: 500; }
-#phase {
-  display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; padding: 3px 10px 3px 7px;
-  border-radius: 999px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
-  background: #2a2a2a; color: var(--text);
-}
-#phase::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-#phase.work { background: rgba(220, 20, 60, 0.18); }
-#phase.work::before { background: var(--work); }
-
-#reps { top: 16px; right: 16px; padding: 12px 14px; width: 232px; }
-#reps h2, #legend h2 {
-  margin: 0 0 8px; font-size: 10.5px; color: var(--muted); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.08em;
-}
-#reps table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-#reps td { padding: 4px 0; border-top: 1px solid var(--panel-edge); font-size: 12.5px; }
-#reps tr:first-child td { border-top: 0; }
-#reps td:first-child { font-weight: 600; }
-#reps td:first-child::before {
-  content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px;
-  background: var(--work); margin-right: 7px; vertical-align: 1px;
-}
-#reps td.n { text-align: right; color: var(--muted); }
-#reps td.n b { color: var(--text); font-weight: 600; }
-#reps tr { cursor: pointer; }
-#reps tr:hover td { color: var(--pace-fast); }
-
-#legend { right: 16px; top: 158px; padding: 12px 14px; width: 232px; }
-#legend .note { margin: 0 0 10px; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
-.ramp { height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--pace-slow), var(--pace-mid), var(--pace-fast)); }
-.ramp-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 4px; font-variant-numeric: tabular-nums; }
-.sw { display: flex; gap: 14px; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
-.sw span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; opacity: 0.8; }
-.sw .w::before { background: var(--work); }
-.sw .e::before { background: #666; }
-
-#bar {
-  left: 16px; right: 16px; bottom: 16px; padding: 10px 14px;
-  display: grid; grid-template-columns: auto auto 1fr auto auto auto; gap: 14px; align-items: center;
-}
-button, select {
-  font: inherit; font-weight: 600; color: var(--text); background: #222; border: 1px solid var(--panel-edge);
-  border-radius: 4px; padding: 6px 12px; cursor: pointer;
-}
-button:hover, select:hover { border-color: var(--faint); }
-button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-button.on { background: var(--work); border-color: var(--work); color: #fff; }
-#play { width: 74px; }
-.clock { font-family: var(--display); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 64px; line-height: 1; }
-.clock small { font-family: var(--ui); font-size: 11px; color: var(--muted); font-weight: 500; }
-#time { width: 100%; }
-input[type=range] { accent-color: var(--work); height: 24px; margin: 0; }
-label.ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
-label.ctl input[type=range] { width: 90px; }
-label.ctl output { color: var(--text); font-variant-numeric: tabular-nums; min-width: 28px; }
-.seg { display: inline-flex; border: 1px solid var(--panel-edge); border-radius: 4px; overflow: hidden; }
-.seg button { border: 0; border-radius: 0; padding: 6px 10px; }
-.seg button + button { border-left: 1px solid var(--panel-edge); }
-
-#tip {
-  position: fixed; pointer-events: none; display: none; padding: 6px 9px; border-radius: 4px;
-  background: var(--panel); border: 1px solid var(--panel-edge); font-size: 11.5px; line-height: 1.5;
-  font-variant-numeric: tabular-nums; transform: translate(12px, -50%);
-}
-#tip b { font-family: var(--display); font-size: 14px; font-weight: 700; }
-#hint { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); color: var(--faint); font-size: 11px; pointer-events: none; }
-
-@media (max-width: 860px) {
-  #legend, #reps { display: none; }
-  #bar { grid-template-columns: auto auto 1fr; }
-  #bar .hide-sm { display: none; }
-}
-@media (prefers-reduced-motion: reduce) { .panel { backdrop-filter: none; } }
-"""
-
-BODY = """<div id="scene"></div>
-
-<section id="session" class="panel" aria-live="polite">
-  <h1 id="title"></h1>
-  <div class="sub" id="sub"></div>
-  <div class="stats">
-    <div class="stat"><div class="k">Distance</div><div class="v"><span id="s-dist">0.00</span><small>km</small></div></div>
-    <div class="stat"><div class="k">Pace</div><div class="v"><span id="s-pace">-</span><small>/km</small></div></div>
-    <div class="stat"><div class="k">Cadence</div><div class="v"><span id="s-cad">-</span><small>spm</small></div></div>
-  </div>
-  <div id="phase">Warm-up</div>
-</section>
-
-<section id="reps" class="panel">
-  <h2>Work intervals</h2>
-  <table><tbody id="rep-rows"></tbody></table>
-</section>
-
-<section id="legend" class="panel">
-  <h2>Height and color: pace</h2>
-  <p class="note">Faster is higher. Walking sits near the ground, the 5 min reps rise above it.</p>
-  <div class="ramp"></div>
-  <div class="ramp-l"><span id="l-slow"></span><span id="l-fast"></span></div>
-  <div class="sw"><span class="w">Work curtain</span><span class="e">Easy curtain</span></div>
-</section>
-
-<div id="hint">Drag to orbit, wheel to zoom, right-drag to pan. Hover the track for details.</div>
-
-<footer id="bar" class="panel">
-  <button id="play" aria-label="Play">Play</button>
-  <div class="clock"><span id="clock">0:00</span> <small>/ <span id="total"></span></small></div>
-  <input id="time" type="range" min="0" max="1" step="1" value="0" aria-label="Elapsed time">
-  <label class="ctl hide-sm">Speed
-    <select id="speed" aria-label="Playback speed">
-      <option value="1">1x</option><option value="5">5x</option><option value="10" selected>10x</option><option value="30">30x</option>
-    </select>
-  </label>
-  <label class="ctl hide-sm">Height scale <input id="exag" type="range" min="10" max="150" step="5" value="60"><output id="exag-o">60</output></label>
-  <div class="seg hide-sm" role="group" aria-label="Camera">
-    <button id="cam-orbit" class="on">Overview</button><button id="cam-follow">Follow</button>
-  </div>
-</footer>
-<div id="tip" role="tooltip"></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script>
-const DATA = __DATA__;
+// interval-analysis 3D viewer. Expects a global DATA (written by viewer.py into data.js):
+//   DATA.pts  rows of [east_m, north_m, ele_m, t_s, dist_m, pace_min_km, cadence_spm, phase_idx]
+//   DATA.reps detected work intervals, DATA.phases names, DATA.map optional ground texture.
+// Vertical axis is speed (faster is higher); color is a heat ramp over pace.
 const P = DATA.pts;                 // [east, north, ele, t, dist, pace, cad, phase]
 const N = P.length;
 const T_END = P[N - 1][3];
@@ -230,8 +12,8 @@ const fmtPace = m => (!isFinite(m) || m <= 0 || m >= 20) ? "-" : `${Math.floor(m
 const fmtClock = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// Pace color ramp: slow = deep blue, fast = pale blue (light means more on the dark ground).
-const workPts = P.filter(p => p[7] > 0).map(p => p[5]);
+// Fast end of the ramp: fastest smoothed pace inside the reps (or the whole run if none were found).
+const workPts = DATA.reps.length ? P.filter(p => p[7] > 0).map(p => p[5]) : P.map(p => p[5]);
 const PACE_FAST = Math.min(...workPts), PACE_SLOW = 9.0;
 // Heat ramp: ember for slow, crimson-orange in the middle, hot yellow for the fastest running.
 const RAMP = ["#551100", "#882200", "#cc3300", "#ff8800", "#ffee55"].map(c => new THREE.Color(c));
@@ -291,6 +73,27 @@ ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.5, cz); scene.add(g
 const gridSize = Math.ceil(extent * 2.6 / 500) * 500;
 const grid = new THREE.GridHelper(gridSize, gridSize / 100, cssTok("--grid-major"), cssTok("--grid-minor"));
 grid.material.transparent = true; grid.material.opacity = 0.6; grid.position.set(cx, 0, cz); scene.add(grid);
+
+// OpenStreetMap ground texture, placed with the same projection as the track (north = -z).
+let mapMesh = null;
+const mapBtn = document.getElementById("map-btn");
+if (DATA.map) {
+  const m = DATA.map;
+  const tex = new THREE.TextureLoader().load(m.uri);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  mapMesh = new THREE.Mesh(new THREE.PlaneGeometry(m.x1 - m.x0, m.n1 - m.n0), new THREE.MeshBasicMaterial({ map: tex }));
+  mapMesh.rotation.x = -Math.PI / 2;                       // image top (north) ends up at -z
+  mapMesh.position.set((m.x0 + m.x1) / 2, 0.05, -(m.n0 + m.n1) / 2);
+  scene.add(mapMesh);
+  grid.visible = false;
+  mapBtn.hidden = false; document.getElementById("attrib").hidden = false;
+}
+function setMap(v) {
+  if (!mapMesh) return;
+  mapMesh.visible = v; grid.visible = !v;
+  mapBtn.classList.toggle("on", v); mapBtn.setAttribute("aria-pressed", v);
+}
+mapBtn.addEventListener("click", () => setMap(!mapMesh.visible));
 
 // Scale bar: 500 m on the ground, south-west corner
 (function scaleBar() {
@@ -430,7 +233,9 @@ function setTime(newT, fromSlider = false) {
   document.getElementById("s-pace").textContent = fmtPace(s.pace);
   document.getElementById("s-cad").textContent = s.cad > 0 ? Math.round(s.cad) : "-";
   const work = s.phase > 0;
-  phaseEl.textContent = work ? DATA.phases[s.phase] : (t < DATA.reps[0].start ? "Warm-up" : (t > DATA.reps[DATA.reps.length - 1].end ? "Cool-down" : "Recovery"));
+  const reps = DATA.reps;
+  phaseEl.textContent = work ? DATA.phases[s.phase]
+    : !reps.length ? "Easy" : (t < reps[0].start ? "Warm-up" : (t > reps[reps.length - 1].end ? "Cool-down" : "Recovery"));
   phaseEl.classList.toggle("work", work);
   if (!fromSlider) timeEl.value = t;
 }
@@ -454,6 +259,7 @@ addEventListener("keydown", e => {
   if (e.key === "ArrowRight") setTime(t + 10);
   if (e.key === "ArrowLeft") setTime(t - 10);
   if (e.key.toLowerCase() === "f") setFollow(!follow);
+  if (e.key.toLowerCase() === "m") setMap(!(mapMesh && mapMesh.visible));
 });
 
 // Hover tooltip on the tube
@@ -493,19 +299,3 @@ addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; cam
 setTime(0);
 if (!reduceMotion) setPlaying(true);
 requestAnimationFrame(frame);
-</script>"""
-
-body_html = BODY.replace("__DATA__", json.dumps(data, separators=(",", ":")))
-fragment = HEAD_LINKS + "\n<style>\n" + CSS + "</style>\n" + body_html
-full = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        + HEAD_LINKS + '\n<link rel="stylesheet" href="style.css">\n</head>\n<body>\n' + body_html
-        + "\n</body>\n</html>\n")
-
-(HERE / "style.css").write_text(CSS, encoding="utf-8")
-(HERE / "index.html").write_text(full, encoding="utf-8")
-print(f"wrote index.html ({len(full)/1024:.0f} KB, {len(data['pts'])} points) and style.css ({len(CSS)/1024:.1f} KB)")
-if "--fragment" in sys.argv:
-    out = Path(sys.argv[sys.argv.index("--fragment") + 1]) if len(sys.argv) > sys.argv.index("--fragment") + 1 else HERE / "gpx_3d_fragment.html"
-    out.write_text(fragment, encoding="utf-8")
-    print("wrote", out)

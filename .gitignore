@@ -1,0 +1,8 @@
+# OpenStreetMap tile cache (the stitched map is embedded in each session's data.js)
+data/tiles/
+
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
