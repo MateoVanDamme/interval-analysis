@@ -6,121 +6,7 @@
 <title>3 x 5min in 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap">
-<style>
-  :root {
-    --ground: #1a1a1a;
-    --panel: rgba(17, 17, 17, 0.9);
-    --panel-edge: #333;
-    --text: #ddd;
-    --muted: #888;
-    --faint: #555;
-    --work: #dc143c;
-    --easy: #444;
-    --pace-slow: #551100;
-    --pace-mid: #cc3300;
-    --pace-fast: #ffee55;
-    --focus: #dc143c;
-    --display: "Space Mono", Consolas, "Courier New", monospace;
-    --ui: "Space Mono", Consolas, "Courier New", monospace;
-  }
-  html, body { margin: 0; height: 100%; }
-  body {
-    background: var(--ground); color: var(--text); font-family: var(--ui); font-size: 12px;
-    overflow: hidden; -webkit-font-smoothing: antialiased;
-  }
-  #scene { position: fixed; inset: 0; display: block; }
-  #scene canvas { display: block; }
-  .panel {
-    position: fixed; background: var(--panel); border: 1px solid var(--panel-edge);
-    border-radius: 6px; backdrop-filter: blur(6px); pointer-events: auto;
-  }
-  #session { top: 16px; left: 16px; padding: 14px 18px 12px; min-width: 250px; }
-  #session h1 {
-    margin: 0; font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1.1;
-    letter-spacing: -0.01em; text-wrap: balance;
-  }
-  #session .sub { margin: 6px 0 14px; color: var(--muted); font-size: 11px; }
-  .stats { display: grid; grid-template-columns: repeat(3, auto); gap: 10px 22px; }
-  .stat .k { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; }
-  .stat .v {
-    font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.05;
-    font-variant-numeric: tabular-nums; margin-top: 2px;
-  }
-  .stat .v small { font-size: 11px; color: var(--muted); font-family: var(--ui); margin-left: 3px; font-weight: 500; }
-  #phase {
-    display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; padding: 3px 10px 3px 7px;
-    border-radius: 999px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
-    background: #2a2a2a; color: var(--text);
-  }
-  #phase::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  #phase.work { background: rgba(220, 20, 60, 0.18); }
-  #phase.work::before { background: var(--work); }
-
-  #reps { top: 16px; right: 16px; padding: 12px 14px; width: 232px; }
-  #reps h2, #legend h2 {
-    margin: 0 0 8px; font-size: 10.5px; color: var(--muted); font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.08em;
-  }
-  #reps table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  #reps td { padding: 4px 0; border-top: 1px solid var(--panel-edge); font-size: 12.5px; }
-  #reps tr:first-child td { border-top: 0; }
-  #reps td:first-child { font-weight: 600; }
-  #reps td:first-child::before {
-    content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px;
-    background: var(--work); margin-right: 7px; vertical-align: 1px;
-  }
-  #reps td.n { text-align: right; color: var(--muted); }
-  #reps td.n b { color: var(--text); font-weight: 600; }
-  #reps tr { cursor: pointer; }
-  #reps tr:hover td { color: var(--pace-fast); }
-
-  #legend { right: 16px; top: 158px; padding: 12px 14px; width: 232px; }
-  #legend .note { margin: 0 0 10px; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
-  .ramp { height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--pace-slow), var(--pace-mid), var(--pace-fast)); }
-  .ramp-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .sw { display: flex; gap: 14px; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
-  .sw span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; opacity: 0.8; }
-  .sw .w::before { background: var(--work); }
-  .sw .e::before { background: #666; }
-
-  #bar {
-    left: 16px; right: 16px; bottom: 16px; padding: 10px 14px;
-    display: grid; grid-template-columns: auto auto 1fr auto auto auto; gap: 14px; align-items: center;
-  }
-  button, select {
-    font: inherit; font-weight: 600; color: var(--text); background: #222; border: 1px solid var(--panel-edge);
-    border-radius: 4px; padding: 6px 12px; cursor: pointer;
-  }
-  button:hover, select:hover { border-color: var(--faint); }
-  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  button.on { background: var(--work); border-color: var(--work); color: #fff; }
-  #play { width: 74px; }
-  .clock { font-family: var(--display); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 64px; line-height: 1; }
-  .clock small { font-family: var(--ui); font-size: 11px; color: var(--muted); font-weight: 500; }
-  #time { width: 100%; }
-  input[type=range] { accent-color: var(--work); height: 24px; margin: 0; }
-  label.ctl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
-  label.ctl input[type=range] { width: 90px; }
-  label.ctl output { color: var(--text); font-variant-numeric: tabular-nums; min-width: 28px; }
-  .seg { display: inline-flex; border: 1px solid var(--panel-edge); border-radius: 4px; overflow: hidden; }
-  .seg button { border: 0; border-radius: 0; padding: 6px 10px; }
-  .seg button + button { border-left: 1px solid var(--panel-edge); }
-
-  #tip {
-    position: fixed; pointer-events: none; display: none; padding: 6px 9px; border-radius: 4px;
-    background: var(--panel); border: 1px solid var(--panel-edge); font-size: 11.5px; line-height: 1.5;
-    font-variant-numeric: tabular-nums; transform: translate(12px, -50%);
-  }
-  #tip b { font-family: var(--display); font-size: 14px; font-weight: 700; }
-  #hint { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); color: var(--faint); font-size: 11px; pointer-events: none; }
-
-  @media (max-width: 860px) {
-    #legend, #reps { display: none; }
-    #bar { grid-template-columns: auto auto 1fr; }
-    #bar .hide-sm { display: none; }
-  }
-  @media (prefers-reduced-motion: reduce) { .panel { backdrop-filter: none; } }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="scene"></div>
@@ -219,15 +105,15 @@ renderer.outputEncoding = THREE.sRGBEncoding;
 wrap.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#1a1a1a");
-scene.fog = new THREE.Fog("#1a1a1a", 3500, 9000);
+scene.background = new THREE.Color("#0e0e0e");
+scene.fog = new THREE.Fog("#0e0e0e", 3500, 9000);
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 30000);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI / 2 - 0.02;
 
-scene.add(new THREE.HemisphereLight("#e6e6e6", "#1a1a1a", 0.9));
+scene.add(new THREE.HemisphereLight("#e6e6e6", "#0e0e0e", 0.9));
 const sun = new THREE.DirectionalLight("#ffffff", 0.7); sun.position.set(-1500, 2200, 1200); scene.add(sun);
 
 // Bounds and ground
@@ -236,10 +122,10 @@ const bb = { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: 
 const cx = (bb.x0 + bb.x1) / 2, cz = (bb.z0 + bb.z1) / 2;
 const extent = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0);
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(extent * 6, extent * 6), new THREE.MeshBasicMaterial({ color: "#1e1e1e" }));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(extent * 6, extent * 6), new THREE.MeshBasicMaterial({ color: "#121212" }));
 ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.5, cz); scene.add(ground);
 const gridSize = Math.ceil(extent * 2.6 / 500) * 500;
-const grid = new THREE.GridHelper(gridSize, gridSize / 100, "#333333", "#262626");
+const grid = new THREE.GridHelper(gridSize, gridSize / 100, "#2a2a2a", "#1c1c1c");
 grid.material.transparent = true; grid.material.opacity = 0.6; grid.position.set(cx, 0, cz); scene.add(grid);
 
 // Scale bar: 500 m on the ground, south-west corner
