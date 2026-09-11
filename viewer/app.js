@@ -201,8 +201,10 @@ runner.add(rBall, rRing, rStem); scene.add(runner);
 
 // Camera fit
 function fitCamera() {
+  // Back off further on portrait screens so the whole route stays in frame.
+  const k = Math.max(1, 1 / camera.aspect);
   controls.target.set(cx, 0, cz);
-  camera.position.set(cx + extent * 0.55, extent * 0.5, cz + extent * 0.75);
+  camera.position.set(cx + extent * 0.55 * k, extent * 0.5 * k, cz + extent * 0.75 * k);
   controls.update();
 }
 fitCamera();
@@ -297,7 +299,7 @@ function frame(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); if (!follow) fitCamera(); });
 setTime(0);
 if (!reduceMotion) setPlaying(true);
 requestAnimationFrame(frame);
