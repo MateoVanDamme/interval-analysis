@@ -43,7 +43,9 @@ DATA.reps.forEach(r => {
 
 // --- Scene ------------------------------------------------------------------
 const wrap = document.getElementById("scene");
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+// Logarithmic depth: the scene spans kilometers with surfaces a few cm apart (map, grid,
+// curtain feet), which z-fights with a linear depth buffer.
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 wrap.appendChild(renderer.domElement);
@@ -54,7 +56,7 @@ const cssTok = name => getComputedStyle(document.documentElement).getPropertyVal
 scene.background = new THREE.Color(cssTok("--ground"));
 scene.fog = new THREE.Fog(cssTok("--ground"), 3500, 9000);
 
-const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 30000);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 5, 30000);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI / 2 - 0.02;
